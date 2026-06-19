@@ -17,7 +17,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Play, FlaskConical, Eye, ChevronDown, Trash2 } from 'lucide-react'
+import { GripVertical, Play, FlaskConical, ChevronDown, Trash2 } from 'lucide-react'
 
 import { Event, Driver, Stint } from '@/types/database'
 import AppNavBar from '@/components/AppNavBar'
@@ -386,11 +386,6 @@ export default function DashboardView({
         centerSlot={
           <div className="flex items-center gap-2 min-w-0">
             <StatusBadge />
-            {!isHost && !isReadOnly && (
-              <span className="badge badge-outline badge-info text-[9px] font-condensed font-bold uppercase tracking-wide gap-1 flex-shrink-0">
-                <Eye size={9} aria-hidden="true" /> Viewer
-              </span>
-            )}
           </div>
         }
       />
@@ -582,13 +577,6 @@ export default function DashboardView({
                   </div>
                 )}
 
-                {!isHost && !isReadOnly && (
-                  <div className="bg-brand-bg4 border border-dashed border-brand-border2 rounded px-3 py-2 text-center">
-                    <p className="flex items-center justify-center gap-1.5 text-[10px] font-mono uppercase tracking-wide text-brand-txt3">
-                      <Eye size={10} aria-hidden="true" /> View only — controls visible to host only
-                    </p>
-                  </div>
-                )}
 
                 {/* Overview subheading */}
                 <p className="text-xs font-mono font-bold uppercase tracking-widest text-brand-txt2 -mb-1">Overview</p>

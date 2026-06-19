@@ -279,7 +279,7 @@ export default function EventDashboardPage() {
     return (
       <div className="min-h-dvh bg-brand-bg flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-brand-cyan border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-brand-yellow border-t-transparent rounded-full animate-spin" />
           <p className="font-mono text-xs text-brand-txt3 uppercase tracking-widest">Loading race…</p>
         </div>
       </div>
