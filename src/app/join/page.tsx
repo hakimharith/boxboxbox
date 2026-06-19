@@ -81,7 +81,8 @@ function JoinContent() {
               placeholder="123456"
               maxLength={6}
               autoComplete="off"
-              className="input input-bordered w-full text-lg font-mono text-center tracking-widest"
+              style={{ fontSize: '16px' }}
+              className="input input-bordered w-full font-mono text-center tracking-widest"
             />
           </div>
 
