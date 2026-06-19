@@ -1,26 +1,350 @@
 @import "tailwindcss";
+@plugin "daisyui";
+@import "tw-animate-css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* ── BBX brand vars (light mode) ─────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bbx-bg:       #F2F2F4;
+  --bbx-bg2:      #FFFFFF;
+  --bbx-bg3:      #E8E8EC;
+  --bbx-bg4:      #DCDCE2;
+  --bbx-bg5:      #D0D0D8;
+  --bbx-border:   #D0D0D8;
+  --bbx-border2:  #C4C4CE;
+  --bbx-txt:      #18181C;
+  --bbx-txt2:     #5A5A68;
+  --bbx-txt3:     #9090A0;
+}
+
+/* ── BBX brand vars (dark mode) ──────────────────────────────── */
+.dark {
+  --bbx-bg:       #0D0D0F;
+  --bbx-bg2:      #141416;
+  --bbx-bg3:      #1C1C20;
+  --bbx-bg4:      #242428;
+  --bbx-bg5:      #2C2C32;
+  --bbx-border:   #2E2E36;
+  --bbx-border2:  #3A3A44;
+  --bbx-txt:      #EAEAEE;
+  --bbx-txt2:     #848494;
+  --bbx-txt3:     #4E4E5E;
+}
+
+/* ── Override DaisyUI light theme with BBX colors ────────────── */
+[data-theme="light"] {
+  --color-base-100: var(--bbx-bg);
+  --color-base-200: var(--bbx-bg2);
+  --color-base-300: var(--bbx-bg3);
+  --color-base-content: var(--bbx-txt);
+  --color-primary: #ffe600;
+  --color-primary-content: #000000;
+  --color-secondary: #00d4ff;
+  --color-secondary-content: #000000;
+  --color-accent: #b580ff;
+  --color-accent-content: #ffffff;
+  --color-neutral: var(--bbx-bg4);
+  --color-neutral-content: var(--bbx-txt);
+  --color-error: #ff3d3d;
+  --color-error-content: #ffffff;
+  --color-success: #00e676;
+  --color-success-content: #000000;
+  --color-warning: #ffe600;
+  --color-warning-content: #000000;
+  --color-info: #00d4ff;
+  --color-info-content: #000000;
+}
+
+/* ── Override DaisyUI dark theme with BBX colors ─────────────── */
+[data-theme="dark"] {
+  --color-base-100: var(--bbx-bg);
+  --color-base-200: var(--bbx-bg2);
+  --color-base-300: var(--bbx-bg3);
+  --color-base-content: var(--bbx-txt);
+  --color-primary: #ffe600;
+  --color-primary-content: #000000;
+  --color-secondary: #00d4ff;
+  --color-secondary-content: #000000;
+  --color-accent: #b580ff;
+  --color-accent-content: #ffffff;
+  --color-neutral: var(--bbx-bg4);
+  --color-neutral-content: var(--bbx-txt);
+  --color-error: #ff3d3d;
+  --color-error-content: #ffffff;
+  --color-success: #00e676;
+  --color-success-content: #000000;
+  --color-warning: #ffe600;
+  --color-warning-content: #000000;
+  --color-info: #00d4ff;
+  --color-info-content: #000000;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bbx-bg);
+  --color-foreground: var(--bbx-txt);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-condensed: var(--font-condensed);
+  --font-display: var(--font-display);
+  --font-heading: var(--font-sans);
+  /* Brand surface tokens — dynamic per theme */
+  --color-brand-bg:      var(--bbx-bg);
+  --color-brand-bg2:     var(--bbx-bg2);
+  --color-brand-bg3:     var(--bbx-bg3);
+  --color-brand-bg4:     var(--bbx-bg4);
+  --color-brand-bg5:     var(--bbx-bg5);
+  --color-brand-border:  var(--bbx-border);
+  --color-brand-border2: var(--bbx-border2);
+  --color-brand-txt:     var(--bbx-txt);
+  --color-brand-txt2:    var(--bbx-txt2);
+  --color-brand-txt3:    var(--bbx-txt3);
+  /* Accent colors — same in both modes */
+  --color-brand-green:  #00e676;
+  --color-brand-yellow: #ffe600;
+  --color-brand-red:    #ff3d3d;
+  --color-brand-cyan:   #00d4ff;
+  --color-brand-purple: #b580ff;
+  --color-brand-orange: #ff8800;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    @apply font-sans;
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-brand-bg text-brand-txt;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+/* ── DaisyUI btn overrides — keep motorsport condensed feel ───── */
+.btn {
+  font-family: var(--font-condensed);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.8125rem;
+  border-radius: 0.25rem;
+}
+.btn-primary {
+  border-color: transparent;
+}
+.btn-error {
+  border-color: transparent;
+}
+.btn-accent {
+  border-color: transparent;
+}
+
+/* ── DaisyUI input overrides ──────────────────────────────────── */
+.input, .select {
+  background-color: var(--bbx-bg4);
+  border-color: var(--bbx-border2);
+  color: var(--bbx-txt);
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+}
+.input:focus, .select:focus {
+  outline-color: rgba(255, 230, 0, 0.5);
+  border-color: rgba(255, 230, 0, 0.5);
+}
+
+/* ── DaisyUI modal overrides ──────────────────────────────────── */
+.modal-box {
+  background-color: var(--bbx-bg2);
+  border: 1px solid var(--bbx-border2);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  max-width: 20rem;
+  width: 100%;
+}
+
+/* ── Scanline overlay ─────────────────────────────────────────── */
+.scanlines {
+  position: relative;
+}
+.scanlines::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0, 212, 255, 0.02) 3px,
+    rgba(0, 212, 255, 0.02) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+/* ── Race background — radial top haze ───────────────────────── */
+.race-bg {
+  background:
+    radial-gradient(ellipse 80% 35% at 50% 0%, rgba(0,212,255,0.1) 0%, transparent 70%),
+    var(--bbx-bg);
+}
+
+/* Light mode: softer warm haze */
+:root:not(.dark) .race-bg {
+  background:
+    radial-gradient(ellipse 80% 30% at 50% 0%, rgba(255,230,0,0.07) 0%, transparent 60%),
+    var(--bbx-bg);
+}
+
+/* ── BBX diagonal chevron livery accent ──────────────────────── */
+.bbx-chevron {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 30% 100%, 0 60%);
+}
+
+/* ── Timer glow utilities ─────────────────────────────────────── */
+.timer-glow {
+  text-shadow:
+    0 0 8px rgba(0, 212, 255, 0.9),
+    0 0 20px rgba(0, 212, 255, 0.6),
+    0 0 40px rgba(0, 212, 255, 0.3);
+}
+.timer-glow-green {
+  text-shadow:
+    0 0 8px rgba(0, 230, 118, 0.9),
+    0 0 20px rgba(0, 230, 118, 0.55),
+    0 0 40px rgba(0, 230, 118, 0.25);
+}
+.timer-glow-yellow {
+  text-shadow:
+    0 0 8px rgba(255, 230, 0, 0.9),
+    0 0 20px rgba(255, 230, 0, 0.55),
+    0 0 40px rgba(255, 230, 0, 0.25);
+}
+.timer-glow-red {
+  text-shadow:
+    0 0 8px rgba(255, 61, 61, 1.0),
+    0 0 20px rgba(255, 61, 61, 0.7),
+    0 0 40px rgba(255, 61, 61, 0.4);
+}
+.timer-glow-purple {
+  text-shadow:
+    0 0 8px rgba(181, 128, 255, 0.9),
+    0 0 20px rgba(181, 128, 255, 0.55),
+    0 0 40px rgba(181, 128, 255, 0.25);
+}
+
+/* ── Neon glow box utilities ──────────────────────────────────── */
+.glow-cyan {
+  box-shadow: 0 0 24px rgba(0, 212, 255, 0.35), 0 0 8px rgba(0, 212, 255, 0.15);
+}
+.glow-green {
+  box-shadow: 0 0 24px rgba(0, 230, 118, 0.4), 0 0 8px rgba(0, 230, 118, 0.2);
+}
+.glow-yellow {
+  box-shadow: 0 0 20px rgba(255, 230, 0, 0.3), 0 0 6px rgba(255, 230, 0, 0.15);
+}
+.glow-red {
+  box-shadow: 0 0 24px rgba(255, 61, 61, 0.4), 0 0 8px rgba(255, 61, 61, 0.2);
+}
+
+/* ── Stripe animations ────────────────────────────────────────── */
+@keyframes stripe-scroll {
+  to { background-position: 28px 0; }
+}
+.pause-stripe {
+  height: 4px;
+  background: repeating-linear-gradient(90deg, #ffe600 0, #ffe600 12px, transparent 12px, transparent 20px);
+  background-size: 32px 4px;
+  animation: stripe-scroll 0.45s linear infinite;
+  box-shadow: 0 0 10px rgba(255,230,0,0.5);
+}
+.test-stripe {
+  height: 4px;
+  background: repeating-linear-gradient(90deg, #b580ff 0, #b580ff 12px, transparent 12px, transparent 20px);
+  background-size: 32px 4px;
+  animation: stripe-scroll 0.45s linear infinite;
+  opacity: 0.85;
+}
+
+/* ── Card flash ───────────────────────────────────────────────── */
+@keyframes flash-red {
+  0%, 100% {
+    border-color: rgba(255,61,61,0.2);
+    box-shadow: none;
+  }
+  50% {
+    border-color: #ff3d3d;
+    background-color: rgba(255,61,61,0.07);
+    box-shadow: 0 0 30px rgba(255,61,61,0.35), inset 0 0 20px rgba(255,61,61,0.08);
   }
 }
+.card-flash {
+  animation: flash-red 0.9s ease-in-out infinite;
+}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ── Live dot ─────────────────────────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.6); }
+  50%       { opacity: 0.7; box-shadow: 0 0 0 4px rgba(0, 230, 118, 0); }
+}
+.live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #00e676;
+  flex-shrink: 0;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+/* ── Modal entrance animation ─────────────────────────────────── */
+@keyframes modal-enter {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-enter {
+  animation: modal-enter 0.2s ease-out forwards;
+}
+
+/* ── Light mode: invert scanlines and reduce glow intensity ───── */
+:root:not(.dark) .scanlines::before {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0, 0, 0, 0.025) 3px,
+    rgba(0, 0, 0, 0.025) 4px
+  );
+}
+
+:root:not(.dark) .timer-glow-green {
+  text-shadow:
+    0 0 6px rgba(0, 160, 80, 0.6),
+    0 0 16px rgba(0, 160, 80, 0.3);
+}
+
+:root:not(.dark) .timer-glow-yellow {
+  text-shadow:
+    0 0 6px rgba(180, 140, 0, 0.7),
+    0 0 16px rgba(180, 140, 0, 0.35);
+}
+
+:root:not(.dark) .timer-glow-red {
+  text-shadow:
+    0 0 6px rgba(220, 40, 40, 0.8),
+    0 0 16px rgba(220, 40, 40, 0.4);
+}
+
+:root:not(.dark) .timer-glow {
+  text-shadow:
+    0 0 6px rgba(0, 150, 200, 0.7),
+    0 0 16px rgba(0, 150, 200, 0.35);
+}
+
+/* ── Reduced motion overrides ─────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .pause-stripe, .test-stripe, .card-flash, .live-dot, .modal-enter {
+    animation: none;
+  }
 }

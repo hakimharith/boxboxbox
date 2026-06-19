@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useParams } from 'next/navigation'
 import { getHostSession } from '@/types/app'
+import { getEvent, getDrivers, getStints } from '@/actions/data'
 import { Event, Driver, Stint } from '@/types/database'
 import DashboardView from '@/components/dashboard/DashboardView'
 
-import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { useRaceTimer } from '@/hooks/useRaceTimer'
 import { useStintTimer } from '@/hooks/useStintTimer'
 import { useMaxStintAlert } from '@/hooks/useMaxStintAlert'
@@ -26,7 +25,6 @@ import {
 export default function EventDashboardPage() {
   const params = useParams<{ id: string }>()
   const eventId = params.id
-  const router = useRouter()
 
   // ── Initial data ──────────────────────────────────────────────
   const [initialEvent, setInitialEvent] = useState<Event | null>(null)
@@ -44,6 +42,7 @@ export default function EventDashboardPage() {
   // ── Race condition guards ─────────────────────────────────────
   const autoStartFiredRef = useRef(false)
   const autoEndFiredRef = useRef(false)
+  const prevEventStatusRef = useRef<string | undefined>(undefined)
 
   // ── Host detection ────────────────────────────────────────────
   useEffect(() => {
@@ -52,43 +51,40 @@ export default function EventDashboardPage() {
     setIsHost(session?.isHost === true)
   }, [eventId])
 
-  // ── Initial data fetch ────────────────────────────────────────
-  useEffect(() => {
+  // ── Data fetch + refresh ──────────────────────────────────────
+  const fetchData = useCallback(async () => {
     if (!eventId) return
-    const supabase = createClient()
-
-    async function fetchData() {
-      try {
-        const [eventRes, driversRes, stintsRes] = await Promise.all([
-          supabase.from('events').select('*').eq('id', eventId).single(),
-          supabase.from('drivers').select('*').eq('event_id', eventId).order('sequence_order'),
-          supabase.from('stints').select('*').eq('event_id', eventId).order('swap_number'),
-        ])
-
-        if (eventRes.error) throw new Error(eventRes.error.message)
-        if (driversRes.error) throw new Error(driversRes.error.message)
-        if (stintsRes.error) throw new Error(stintsRes.error.message)
-
-        setInitialEvent(eventRes.data as Event)
-        setInitialDrivers(driversRes.data as Driver[])
-        setInitialStints(stintsRes.data as Stint[])
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load event')
-      } finally {
-        setLoading(false)
-      }
+    try {
+      const [latestEvent, latestDrivers, latestStints] = await Promise.all([
+        getEvent(eventId),
+        getDrivers(eventId),
+        getStints(eventId),
+      ])
+      if (!latestEvent) throw new Error('Event not found')
+      setInitialEvent(latestEvent)
+      setInitialDrivers(latestDrivers)
+      setInitialStints(latestStints)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load event')
+    } finally {
+      setLoading(false)
     }
-
-    fetchData()
   }, [eventId])
 
-  // ── Realtime sync ─────────────────────────────────────────────
-  const { event, drivers, stints } = useRealtimeSync({
-    eventId: eventId ?? '',
-    initialEvent: initialEvent ?? ({} as Event),
-    initialDrivers,
-    initialStints,
-  })
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  // ── Viewer polling (non-host only, every 60s) ─────────────────
+  useEffect(() => {
+    if (isHost) return
+    const interval = setInterval(fetchData, 60_000)
+    return () => clearInterval(interval)
+  }, [isHost, fetchData])
+
+  const event = initialEvent
+  const drivers = initialDrivers
+  const stints = initialStints
 
   // ── Race timer ────────────────────────────────────────────────
   const { elapsed, remaining, isFinished } = useRaceTimer({
@@ -124,7 +120,7 @@ export default function EventDashboardPage() {
     testRemaining,
     testCurrentStintElapsed,
     testSwapCount,
-    testCurrentDriverIndex,
+    testStints,
     doTestSwap,
     doTestPause,
     doTestResume,
@@ -132,6 +128,19 @@ export default function EventDashboardPage() {
   } = useTestMode({
     event: event ?? ({} as Event),
     drivers,
+  })
+
+  // ── Test mode max stint alert ─────────────────────────────────
+  const testActiveStint = testStints.find((s) => s.ended_at === null) ?? null
+  const {
+    isFlashing: testIsFlashing,
+    showAlertModal: testShowAlertModal,
+    minutesLeft: testMinutesLeft,
+    acknowledgeAlert: testAcknowledgeAlert,
+  } = useMaxStintAlert({
+    stintElapsed: testCurrentStintElapsed,
+    maxStintMinutes: event?.max_stint_time_minutes ?? null,
+    stintId: testActiveStint?.id ?? null,
   })
 
   // ── Auto-start: when pending + startTime in past ──────────────
@@ -163,10 +172,13 @@ export default function EventDashboardPage() {
       .catch(console.error)
   }, [isFinished, event, isHost, eventId])
 
-  // ── Show chequered flag when realtime pushes 'finished' ───────
+  // ── Show chequered flag only on live transition to 'finished' ──
   useEffect(() => {
     if (!event) return
-    if (event.status === 'finished' && !showChequeredFlag && !showEndModal) {
+    const prev = prevEventStatusRef.current
+    prevEventStatusRef.current = event.status
+    // Only trigger modal on a status transition, not on initial load of an already-finished event
+    if (event.status === 'finished' && prev !== undefined && prev !== 'finished' && !showChequeredFlag && !showEndModal) {
       setShowChequeredFlag(true)
     }
   }, [event?.status]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -186,7 +198,8 @@ export default function EventDashboardPage() {
   const handleStartRace = useCallback(async () => {
     if (!eventId || !isHost) return
     await startRace(eventId)
-  }, [eventId, isHost])
+    await fetchData()
+  }, [eventId, isHost, fetchData])
 
   const handleSwap = useCallback(() => {
     setShowSwapModal(true)
@@ -196,7 +209,8 @@ export default function EventDashboardPage() {
     if (!eventId || !isHost) return
     setShowSwapModal(false)
     await swapDriver(eventId)
-  }, [eventId, isHost])
+    await fetchData()
+  }, [eventId, isHost, fetchData])
 
   const handleCancelSwap = useCallback(() => {
     setShowSwapModal(false)
@@ -205,12 +219,14 @@ export default function EventDashboardPage() {
   const handlePause = useCallback(async () => {
     if (!eventId || !isHost) return
     await pauseRace(eventId)
-  }, [eventId, isHost])
+    await fetchData()
+  }, [eventId, isHost, fetchData])
 
   const handleResume = useCallback(async () => {
     if (!eventId || !isHost) return
     await resumeRace(eventId)
-  }, [eventId, isHost])
+    await fetchData()
+  }, [eventId, isHost, fetchData])
 
   const handleEndRace = useCallback(() => {
     setShowEndModal(true)
@@ -220,8 +236,9 @@ export default function EventDashboardPage() {
     if (!eventId || !isHost) return
     setShowEndModal(false)
     await endRace(eventId)
+    await fetchData()
     setShowChequeredFlag(true)
-  }, [eventId, isHost])
+  }, [eventId, isHost, fetchData])
 
   const handleCancelEnd = useCallback(() => {
     setShowEndModal(false)
@@ -230,21 +247,21 @@ export default function EventDashboardPage() {
   const handleAddDriverToQueue = useCallback(
     async (driverId: string) => {
       if (!eventId || !isHost) return
-      // driverId here is actually passed as a driver name from AddDriverToQueue
-      // The component passes the driver's id — we look up the name to re-add
       const driver = drivers.find((d) => d.id === driverId)
       if (!driver) return
       await addDriverToQueue(eventId, driver.name)
+      await fetchData()
     },
-    [eventId, isHost, drivers]
+    [eventId, isHost, drivers, fetchData]
   )
 
   const handleReorderDrivers = useCallback(
     async (reorderedDrivers: Driver[]) => {
       if (!eventId || !isHost) return
       await reorderDrivers(eventId, reorderedDrivers.map((d) => d.id))
+      await fetchData()
     },
-    [eventId, isHost]
+    [eventId, isHost, fetchData]
   )
 
   // ── Test mode action wrappers ─────────────────────────────────
@@ -287,39 +304,25 @@ export default function EventDashboardPage() {
   const displaySwapCount = isTestMode ? testSwapCount : swapCount
   const displayIsPaused = isTestMode ? testIsPaused : event.status === 'paused'
 
-  // In test mode, compute test current driver
-  const testDriverIndex = testCurrentDriverIndex % (drivers.length || 1)
-  const testCurrentDriver = isTestMode
-    ? sortedDrivers[testDriverIndex] ?? null
-    : null
-  const effectiveCurrentDriver = isTestMode ? testCurrentDriver : currentDriver
-  const effectiveNextDriver = isTestMode
-    ? sortedDrivers[(testDriverIndex + 1) % (sortedDrivers.length || 1)] ?? null
-    : nextDriver
-
-  // Test mode max stint alert — use same hook but with test elapsed
-  // We pass a synthetic stintId derived from testCurrentDriverIndex for reset behavior
-  const testStintId = isTestMode ? `test-${testCurrentDriverIndex}` : null
-
   return (
     <DashboardView
       event={event}
       drivers={drivers}
-      stints={stints}
+      stints={isTestMode ? testStints : stints}
       isHost={isHost}
       elapsed={displayElapsed}
       remaining={displayRemaining}
       currentStintElapsed={displayStintElapsed}
-      isFlashing={isFlashing}
+      isFlashing={isTestMode ? testIsFlashing : isFlashing}
       isPaused={displayIsPaused}
       isTestMode={isTestMode}
       testModeElapsed={testElapsed}
       testModeRemaining={testRemaining}
       showSwapModal={showSwapModal}
       showEndModal={showEndModal}
-      showMaxStintAlert={showAlertModal}
+      showMaxStintAlert={isTestMode ? testShowAlertModal : showAlertModal}
       showChequeredFlag={showChequeredFlag}
-      minutesUntilMaxStint={minutesLeft}
+      minutesUntilMaxStint={isTestMode ? testMinutesLeft : minutesLeft}
       onSwap={isTestMode ? handleTestSwap : handleSwap}
       onConfirmSwap={isTestMode ? handleTestSwap : handleConfirmSwap}
       onCancelSwap={handleCancelSwap}
@@ -329,7 +332,7 @@ export default function EventDashboardPage() {
       onEndRace={handleEndRace}
       onConfirmEnd={handleConfirmEnd}
       onCancelEnd={handleCancelEnd}
-      onAcknowledgeAlert={acknowledgeAlert}
+      onAcknowledgeAlert={isTestMode ? testAcknowledgeAlert : acknowledgeAlert}
       onAddDriverToQueue={handleAddDriverToQueue}
       onExitTestMode={exitTestMode}
       onStartTestMode={startTestMode}

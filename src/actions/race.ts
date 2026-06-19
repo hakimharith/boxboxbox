@@ -1,342 +1,173 @@
 'use server'
+import { db } from '@/lib/db'
 
-import { createClient } from '@/lib/supabase/server'
-
-// ─────────────────────────────────────────────────────────────
-// startRace
-// ─────────────────────────────────────────────────────────────
 export async function startRace(eventId: string): Promise<{ error?: string }> {
-  const supabase = await createClient()
-
-  // Fetch event
-  const { data: event, error: eventError } = await supabase
-    .from('events')
-    .select('*')
-    .eq('id', eventId)
-    .single()
-
-  if (eventError || !event) {
-    return { error: 'Event not found' }
-  }
+  const events = await db<{ start_time: string | null; status: string }[]>`
+    SELECT start_time, status FROM boxboxbox.events WHERE id = ${eventId} LIMIT 1
+  `
+  if (events.length === 0) return { error: 'Event not found' }
+  const event = events[0]
 
   const now = new Date()
   let startTime: Date
 
-  if (event.start_time === null) {
-    // No start time set — use now
+  if (!event.start_time) {
     startTime = now
   } else {
-    const existingStartTime = new Date(event.start_time)
-    if (existingStartTime > now) {
-      // Future start time — force start now
+    const existing = new Date(event.start_time)
+    if (existing > now) {
       startTime = now
     } else {
-      // Past start time
-      const hoursAgo = (now.getTime() - existingStartTime.getTime()) / 1000 / 3600
-      if (hoursAgo > 24) {
-        return { error: 'Start time cannot be more than 24 hours ago' }
-      }
-      startTime = existingStartTime
+      const hoursAgo = (now.getTime() - existing.getTime()) / 1000 / 3600
+      if (hoursAgo > 24) return { error: 'Start time cannot be more than 24 hours ago' }
+      startTime = existing
     }
   }
 
-  // Update event: status = active, set start_time
-  const { error: updateError } = await supabase
-    .from('events')
-    .update({
-      status: 'active',
-      start_time: startTime.toISOString(),
-    })
-    .eq('id', eventId)
+  await db`
+    UPDATE boxboxbox.events
+    SET status = 'active', start_time = ${startTime.toISOString()}
+    WHERE id = ${eventId}
+  `
 
-  if (updateError) {
-    return { error: updateError.message }
-  }
+  const drivers = await db<{ id: string }[]>`
+    SELECT id FROM boxboxbox.drivers WHERE event_id = ${eventId} ORDER BY sequence_order LIMIT 1
+  `
+  if (drivers.length === 0) return { error: 'No drivers found for this event' }
 
-  // Find driver with sequence_order = 1
-  const { data: firstDriver, error: driverError } = await supabase
-    .from('drivers')
-    .select('*')
-    .eq('event_id', eventId)
-    .order('sequence_order', { ascending: true })
-    .limit(1)
-    .single()
+  const existingStints = await db`
+    SELECT id FROM boxboxbox.stints WHERE event_id = ${eventId} LIMIT 1
+  `
+  if (existingStints.length > 0) return {}
 
-  if (driverError || !firstDriver) {
-    return { error: 'No drivers found for this event' }
-  }
-
-  // Check if a stint already exists (idempotent guard)
-  const { data: existingStints } = await supabase
-    .from('stints')
-    .select('id')
-    .eq('event_id', eventId)
-    .limit(1)
-
-  if (existingStints && existingStints.length > 0) {
-    // Already started — return success
-    return {}
-  }
-
-  // Insert first stint
-  const { error: stintError } = await supabase.from('stints').insert({
-    event_id: eventId,
-    driver_id: firstDriver.id,
-    started_at: startTime.toISOString(),
-    swap_number: 1,
-  })
-
-  if (stintError) {
-    return { error: stintError.message }
-  }
+  await db`
+    INSERT INTO boxboxbox.stints (event_id, driver_id, started_at, swap_number)
+    VALUES (${eventId}, ${drivers[0].id}, ${startTime.toISOString()}, 1)
+  `
 
   return {}
 }
 
-// ─────────────────────────────────────────────────────────────
-// swapDriver
-// ─────────────────────────────────────────────────────────────
 export async function swapDriver(eventId: string): Promise<{ error?: string }> {
-  const supabase = await createClient()
   const now = new Date().toISOString()
 
-  // Find current open stint
-  const { data: currentStint, error: stintError } = await supabase
-    .from('stints')
-    .select('*, drivers(*)')
-    .eq('event_id', eventId)
-    .is('ended_at', null)
-    .single()
+  const currentStints = await db<{ id: string; driver_id: string }[]>`
+    SELECT id, driver_id FROM boxboxbox.stints
+    WHERE event_id = ${eventId} AND ended_at IS NULL
+    LIMIT 1
+  `
+  if (currentStints.length === 0) return { error: 'No active stint found' }
+  const currentStint = currentStints[0]
 
-  if (stintError || !currentStint) {
-    return { error: 'No active stint found' }
-  }
+  const currentDrivers = await db<{ sequence_order: number }[]>`
+    SELECT sequence_order FROM boxboxbox.drivers WHERE id = ${currentStint.driver_id} LIMIT 1
+  `
+  if (currentDrivers.length === 0) return { error: 'Current driver not found' }
+  const currentOrder = currentDrivers[0].sequence_order
 
-  // Get current driver's sequence_order
-  const { data: currentDriver, error: driverError } = await supabase
-    .from('drivers')
-    .select('*')
-    .eq('id', currentStint.driver_id)
-    .single()
+  const [{ count }] = await db<{ count: string }[]>`
+    SELECT COUNT(*)::text as count FROM boxboxbox.drivers WHERE event_id = ${eventId}
+  `
+  const totalDrivers = parseInt(count, 10)
+  const nextOrder = (currentOrder % totalDrivers) + 1
 
-  if (driverError || !currentDriver) {
-    return { error: 'Current driver not found' }
-  }
+  const nextDrivers = await db<{ id: string }[]>`
+    SELECT id FROM boxboxbox.drivers
+    WHERE event_id = ${eventId} AND sequence_order = ${nextOrder}
+    LIMIT 1
+  `
+  if (nextDrivers.length === 0) return { error: 'Next driver not found' }
 
-  // Count total drivers for this event
-  const { count: totalDrivers } = await supabase
-    .from('drivers')
-    .select('*', { count: 'exact', head: true })
-    .eq('event_id', eventId)
+  await db`UPDATE boxboxbox.stints SET ended_at = ${now} WHERE id = ${currentStint.id}`
 
-  if (!totalDrivers) {
-    return { error: 'No drivers found' }
-  }
+  const [{ count: stintCount }] = await db<{ count: string }[]>`
+    SELECT COUNT(*)::text as count FROM boxboxbox.stints WHERE event_id = ${eventId}
+  `
+  const swapNumber = parseInt(stintCount, 10) + 1
 
-  // Find next driver: circular rotation
-  const nextOrder = (currentDriver.sequence_order % totalDrivers) + 1
-
-  const { data: nextDriver, error: nextDriverError } = await supabase
-    .from('drivers')
-    .select('*')
-    .eq('event_id', eventId)
-    .eq('sequence_order', nextOrder)
-    .single()
-
-  if (nextDriverError || !nextDriver) {
-    return { error: 'Next driver not found' }
-  }
-
-  // Close current stint
-  const { error: closeError } = await supabase
-    .from('stints')
-    .update({ ended_at: now })
-    .eq('id', currentStint.id)
-
-  if (closeError) {
-    return { error: closeError.message }
-  }
-
-  // Count total stints for this event to determine swap_number
-  const { count: stintCount } = await supabase
-    .from('stints')
-    .select('*', { count: 'exact', head: true })
-    .eq('event_id', eventId)
-
-  const swapNumber = (stintCount ?? 1) + 1
-
-  // Insert new stint
-  const { error: insertError } = await supabase.from('stints').insert({
-    event_id: eventId,
-    driver_id: nextDriver.id,
-    started_at: now,
-    swap_number: swapNumber,
-  })
-
-  if (insertError) {
-    return { error: insertError.message }
-  }
+  await db`
+    INSERT INTO boxboxbox.stints (event_id, driver_id, started_at, swap_number)
+    VALUES (${eventId}, ${nextDrivers[0].id}, ${now}, ${swapNumber})
+  `
 
   return {}
 }
 
-// ─────────────────────────────────────────────────────────────
-// pauseRace
-// ─────────────────────────────────────────────────────────────
 export async function pauseRace(eventId: string): Promise<{ error?: string }> {
-  const supabase = await createClient()
-
-  const { error } = await supabase
-    .from('events')
-    .update({
-      status: 'paused',
-      paused_at: new Date().toISOString(),
-    })
-    .eq('id', eventId)
-
-  if (error) return { error: error.message }
+  await db`
+    UPDATE boxboxbox.events
+    SET status = 'paused', paused_at = ${new Date().toISOString()}
+    WHERE id = ${eventId}
+  `
   return {}
 }
 
-// ─────────────────────────────────────────────────────────────
-// resumeRace
-// ─────────────────────────────────────────────────────────────
 export async function resumeRace(eventId: string): Promise<{ error?: string }> {
-  const supabase = await createClient()
-
-  // Fetch current event to get paused_at and total_paused_seconds
-  const { data: event, error: fetchError } = await supabase
-    .from('events')
-    .select('paused_at, total_paused_seconds')
-    .eq('id', eventId)
-    .single()
-
-  if (fetchError || !event) {
-    return { error: 'Event not found' }
-  }
+  const rows = await db<{ paused_at: string | null; total_paused_seconds: number }[]>`
+    SELECT paused_at, total_paused_seconds FROM boxboxbox.events WHERE id = ${eventId} LIMIT 1
+  `
+  if (rows.length === 0) return { error: 'Event not found' }
 
   let additionalPausedSeconds = 0
-  if (event.paused_at) {
-    const pausedAt = new Date(event.paused_at).getTime()
-    additionalPausedSeconds = Math.floor((Date.now() - pausedAt) / 1000)
+  if (rows[0].paused_at) {
+    additionalPausedSeconds = Math.floor(
+      (Date.now() - new Date(rows[0].paused_at).getTime()) / 1000
+    )
   }
 
-  const { error } = await supabase
-    .from('events')
-    .update({
-      status: 'active',
-      paused_at: null,
-      total_paused_seconds: (event.total_paused_seconds ?? 0) + additionalPausedSeconds,
-    })
-    .eq('id', eventId)
-
-  if (error) return { error: error.message }
+  await db`
+    UPDATE boxboxbox.events
+    SET status = 'active',
+        paused_at = NULL,
+        total_paused_seconds = ${(rows[0].total_paused_seconds ?? 0) + additionalPausedSeconds}
+    WHERE id = ${eventId}
+  `
   return {}
 }
 
-// ─────────────────────────────────────────────────────────────
-// endRace
-// ─────────────────────────────────────────────────────────────
 export async function endRace(eventId: string): Promise<{ error?: string }> {
-  const supabase = await createClient()
   const now = new Date().toISOString()
-
-  // Close any open stint (idempotent — if none exists, no error)
-  await supabase
-    .from('stints')
-    .update({ ended_at: now })
-    .eq('event_id', eventId)
-    .is('ended_at', null)
-
-  // Update event status to finished
-  const { error } = await supabase
-    .from('events')
-    .update({ status: 'finished' })
-    .eq('id', eventId)
-
-  if (error) return { error: error.message }
+  await db`
+    UPDATE boxboxbox.stints SET ended_at = ${now}
+    WHERE event_id = ${eventId} AND ended_at IS NULL
+  `
+  await db`UPDATE boxboxbox.events SET status = 'finished' WHERE id = ${eventId}`
   return {}
 }
 
-// ─────────────────────────────────────────────────────────────
-// reorderDrivers
-// ─────────────────────────────────────────────────────────────
 export async function reorderDrivers(
   eventId: string,
   orderedDriverIds: string[]
 ): Promise<{ error?: string }> {
-  const supabase = await createClient()
+  const rows = await db<{ status: string }[]>`
+    SELECT status FROM boxboxbox.events WHERE id = ${eventId} LIMIT 1
+  `
+  if (rows.length === 0) return { error: 'Event not found' }
+  if (rows[0].status !== 'pending') return { error: 'Cannot reorder drivers after race has started' }
 
-  // Only allowed when status = 'pending'
-  const { data: event, error: fetchError } = await supabase
-    .from('events')
-    .select('status')
-    .eq('id', eventId)
-    .single()
-
-  if (fetchError || !event) {
-    return { error: 'Event not found' }
+  for (let i = 0; i < orderedDriverIds.length; i++) {
+    await db`
+      UPDATE boxboxbox.drivers
+      SET sequence_order = ${i + 1}
+      WHERE id = ${orderedDriverIds[i]} AND event_id = ${eventId}
+    `
   }
-
-  if (event.status !== 'pending') {
-    return { error: 'Cannot reorder drivers after race has started' }
-  }
-
-  // Update each driver's sequence_order
-  const updates = orderedDriverIds.map((driverId, index) =>
-    supabase
-      .from('drivers')
-      .update({ sequence_order: index + 1 })
-      .eq('id', driverId)
-      .eq('event_id', eventId)
-  )
-
-  const results = await Promise.all(updates)
-  const firstError = results.find((r) => r.error)
-  if (firstError?.error) {
-    return { error: firstError.error.message }
-  }
-
   return {}
 }
 
-// ─────────────────────────────────────────────────────────────
-// addDriverToQueue
-// ─────────────────────────────────────────────────────────────
 export async function addDriverToQueue(
   eventId: string,
   driverName: string
 ): Promise<{ error?: string; driverId?: string }> {
-  const supabase = await createClient()
+  const [{ max }] = await db<{ max: number | null }[]>`
+    SELECT MAX(sequence_order) as max FROM boxboxbox.drivers WHERE event_id = ${eventId}
+  `
+  const nextOrder = (max ?? 0) + 1
 
-  // Find max sequence_order for this event
-  const { data: drivers, error: fetchError } = await supabase
-    .from('drivers')
-    .select('sequence_order')
-    .eq('event_id', eventId)
-    .order('sequence_order', { ascending: false })
-    .limit(1)
-
-  if (fetchError) {
-    return { error: fetchError.message }
-  }
-
-  const maxOrder = drivers && drivers.length > 0 ? drivers[0].sequence_order : 0
-
-  // Insert new driver at end of queue
-  const { data: newDriver, error: insertError } = await supabase
-    .from('drivers')
-    .insert({
-      event_id: eventId,
-      name: driverName,
-      sequence_order: maxOrder + 1,
-    })
-    .select('id')
-    .single()
-
-  if (insertError) {
-    return { error: insertError.message }
-  }
-
-  return { driverId: newDriver?.id }
+  const [newDriver] = await db<{ id: string }[]>`
+    INSERT INTO boxboxbox.drivers (event_id, name, sequence_order)
+    VALUES (${eventId}, ${driverName}, ${nextOrder})
+    RETURNING id
+  `
+  return { driverId: newDriver.id }
 }

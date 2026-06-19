@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useEffect, useCallback } from 'react'
 import { Event, Driver, Stint } from '@/types/database'
+import { getEvent, getDrivers, getStints } from '@/actions/data'
 
 interface UseRealtimeSyncParams {
   eventId: string
@@ -25,122 +25,23 @@ export function useRealtimeSync({
   const [drivers, setDrivers] = useState<Driver[]>(initialDrivers)
   const [stints, setStints] = useState<Stint[]>(initialStints)
 
-  // Update state when initial values change (e.g. after server-side refetch)
-  useEffect(() => {
-    setEvent(initialEvent)
-  }, [initialEvent])
-
-  useEffect(() => {
-    setDrivers(initialDrivers)
-  }, [initialDrivers])
-
-  useEffect(() => {
-    setStints(initialStints)
-  }, [initialStints])
+  const poll = useCallback(async () => {
+    if (!eventId) return
+    const [latestEvent, latestDrivers, latestStints] = await Promise.all([
+      getEvent(eventId),
+      getDrivers(eventId),
+      getStints(eventId),
+    ])
+    if (latestEvent) setEvent(latestEvent)
+    setDrivers(latestDrivers)
+    setStints(latestStints)
+  }, [eventId])
 
   useEffect(() => {
     if (!eventId) return
-
-    const supabase = createClient()
-
-    const channel = supabase
-      .channel(`realtime-event-${eventId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'events',
-          filter: `id=eq.${eventId}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            setEvent(payload.new as Event)
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'stints',
-          filter: `event_id=eq.${eventId}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            setStints((prev) => {
-              const exists = prev.some((s) => s.id === (payload.new as Stint).id)
-              if (exists) return prev
-              return [...prev, payload.new as Stint]
-            })
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'stints',
-          filter: `event_id=eq.${eventId}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            setStints((prev) =>
-              prev.map((s) =>
-                s.id === (payload.new as Stint).id ? (payload.new as Stint) : s
-              )
-            )
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'drivers',
-          filter: `event_id=eq.${eventId}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            setDrivers((prev) => {
-              const exists = prev.some((d) => d.id === (payload.new as Driver).id)
-              if (exists) return prev
-              return [...prev, payload.new as Driver].sort(
-                (a, b) => a.sequence_order - b.sequence_order
-              )
-            })
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'drivers',
-          filter: `event_id=eq.${eventId}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            setDrivers((prev) =>
-              prev
-                .map((d) =>
-                  d.id === (payload.new as Driver).id ? (payload.new as Driver) : d
-                )
-                .sort((a, b) => a.sequence_order - b.sequence_order)
-            )
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [eventId])
+    const interval = setInterval(poll, 3000)
+    return () => clearInterval(interval)
+  }, [eventId, poll])
 
   return { event, drivers, stints }
 }
