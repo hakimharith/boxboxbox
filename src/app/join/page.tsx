@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { DoorOpen } from 'lucide-react'
 import { joinEvent } from './actions'
+import { setHostSession } from '@/types/app'
 import AppNavBar from '@/components/AppNavBar'
 
 function JoinContent() {
@@ -38,6 +39,7 @@ function JoinContent() {
         setIsLoading(false)
         return
       }
+      setHostSession(result.eventId)
       router.push(`/event/${result.eventId}`)
     } catch {
       setError('An unexpected error occurred. Please try again.')
