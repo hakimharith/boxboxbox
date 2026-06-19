@@ -50,12 +50,14 @@ function SortableSlotRow({
   drivers,
   onChange,
   onDelete,
+  isNew,
 }: {
   slot: SlotItem
   index: number
   drivers: Driver[]
   onChange: (slotId: string, driverId: string) => void
   onDelete?: () => void
+  isNew?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: slot.id,
@@ -69,7 +71,7 @@ function SortableSlotRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 py-2 px-2 border-b border-brand-border last:border-b-0"
+      className={`flex items-center gap-2 py-2 px-2 border-b border-brand-border last:border-b-0${isNew ? ' bg-brand-yellow/20' : ''}`}
     >
       <button
         type="button"
@@ -79,7 +81,7 @@ function SortableSlotRow({
       >
         <GripVertical size={14} />
       </button>
-      <div className="w-6 h-6 rounded flex items-center justify-center text-[8px] font-mono font-bold flex-shrink-0 border bg-brand-bg4 text-brand-txt2 border-brand-border2">
+      <div className={`w-6 h-6 rounded flex items-center justify-center text-[8px] font-mono font-bold flex-shrink-0 border ${isNew ? 'bg-brand-bg5 dark:bg-brand-yellow/30 text-black dark:text-brand-yellow border-black/30 dark:border-brand-yellow/50' : 'bg-brand-bg4 text-brand-txt2 border-brand-border2'}`}>
         {String(index + 1).padStart(2, '0')}
       </div>
       <div className="flex-1 relative flex items-center">
@@ -89,6 +91,11 @@ function SortableSlotRow({
           onChange={(e) => onChange(slot.id, e.target.value)}
           className="w-full appearance-none pl-5 bg-transparent text-[10px] text-brand-txt font-mono outline-none cursor-pointer"
         >
+          {isNew && (
+            <option value="" disabled className="bg-brand-bg3 text-brand-txt3">
+              Select Driver
+            </option>
+          )}
           {drivers.map((d) => (
             <option key={d.id} value={d.id} className="bg-brand-bg3 text-brand-txt">
               {d.name}
@@ -272,7 +279,7 @@ export default function DashboardView({
   function addEditSlot() {
     setEditSlots((prev) => [
       ...prev,
-      { id: `edit-new-${Date.now()}`, driverId: drivers[0]?.id ?? '' },
+      { id: `edit-new-${Date.now()}`, driverId: '' },
     ])
   }
 
@@ -567,13 +574,13 @@ export default function DashboardView({
                 {/* Host controls */}
                 {isHost && (
                   <div className="flex gap-1.5">
+                    <EndRaceButton isHost={isHost} onEnd={onEndRace} />
                     <PauseResumeButton
                       isHost={isHost}
                       isPaused={isPaused}
                       onPause={() => setShowPauseModal(true)}
                       onResume={onResume}
                     />
-                    <EndRaceButton isHost={isHost} onEnd={onEndRace} />
                   </div>
                 )}
 
@@ -682,6 +689,7 @@ export default function DashboardView({
                               drivers={[...sortedDriversForSlots, ...localNewDrivers]}
                               onChange={handleEditSlotDriverChange}
                               onDelete={i >= editSlotsInitialCount ? () => deleteEditSlot(slot.id) : undefined}
+                              isNew={i >= editSlotsInitialCount}
                             />
                           ))}
                         </SortableContext>
@@ -691,7 +699,7 @@ export default function DashboardView({
                           <button
                             type="button"
                             onClick={addEditSlot}
-                            className="btn btn-ghost border border-brand-border2 flex-1 btn-sm hover:bg-brand-bg5"
+                            className="btn btn-ghost border border-brand-border2 flex-1 hover:bg-brand-bg5"
                           >
                             + Add Stint
                           </button>
@@ -707,19 +715,19 @@ export default function DashboardView({
                               onKeyDown={(e) => e.key === 'Enter' && confirmAddDriver()}
                               placeholder="Driver name"
                               autoFocus
-                              className="input input-bordered input-sm flex-1 font-mono text-xs"
+                              className="input input-bordered flex-1 font-mono text-xs"
                             />
                             <button
                               type="button"
                               onClick={confirmAddDriver}
-                              className="btn btn-ghost border border-brand-border2 btn-sm flex-shrink-0 hover:bg-brand-bg5"
+                              className="btn btn-ghost border border-brand-border2 flex-shrink-0 hover:bg-brand-bg5"
                             >
                               Add
                             </button>
                             <button
                               type="button"
                               onClick={() => { setShowAddDriver(false); setNewDriverName('') }}
-                              className="btn btn-ghost btn-sm text-brand-txt3 hover:text-brand-txt flex-shrink-0 px-1"
+                              className="btn btn-ghost text-brand-txt3 hover:text-brand-txt flex-shrink-0 px-2"
                             >
                               <Trash2 size={13} />
                             </button>
@@ -729,7 +737,7 @@ export default function DashboardView({
                             <button
                               type="button"
                               onClick={() => setShowAddDriver(true)}
-                              className="btn btn-ghost border border-brand-border2 flex-1 btn-sm hover:bg-brand-bg5"
+                              className="btn btn-ghost border border-brand-border2 flex-1 hover:bg-brand-bg5"
                             >
                               + Add Driver
                             </button>
@@ -739,14 +747,14 @@ export default function DashboardView({
                           <button
                             type="button"
                             onClick={() => setEditingStints(false)}
-                            className="btn btn-error flex-1 btn-sm"
+                            className="btn btn-error flex-1"
                           >
                             Cancel
                           </button>
                           <button
                             type="button"
                             onClick={saveEditStints}
-                            className="btn btn-primary flex-1 btn-sm"
+                            className="btn btn-primary flex-1"
                           >
                             Save
                           </button>

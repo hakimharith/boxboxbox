@@ -18,7 +18,7 @@ function JoinContent() {
 
   useEffect(() => {
     const preCode = searchParams.get('code')
-    if (preCode) setCode(preCode.toUpperCase())
+    if (preCode) setCode(preCode.replace(/\D/g, '').slice(0, 6))
   }, [searchParams])
 
   async function handleSubmit(e: FormEvent) {
@@ -26,6 +26,10 @@ function JoinContent() {
     const trimmed = code.trim()
     if (!trimmed) {
       setError('Please enter an access code.')
+      return
+    }
+    if (!/^\d{6}$/.test(trimmed)) {
+      setError('Access code must be exactly 6 digits.')
       return
     }
 
@@ -69,15 +73,15 @@ function JoinContent() {
               Access code
             </label>
             <input
-              type="text"
+              type="tel"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="KRT-4X2Z"
-              maxLength={8}
-              autoCapitalize="characters"
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="123456"
+              maxLength={6}
               autoComplete="off"
-              spellCheck={false}
-              className="input input-bordered w-full text-lg font-mono text-center tracking-widest uppercase"
+              className="input input-bordered w-full text-lg font-mono text-center tracking-widest"
             />
           </div>
 

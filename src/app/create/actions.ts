@@ -3,12 +3,11 @@ import { db } from '@/lib/db'
 import { customAlphabet } from 'nanoid'
 import { Event } from '@/types/database'
 
-const nanoid = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 7)
+const nanoid = customAlphabet('0123456789', 6)
 
 async function generateUniqueCode(): Promise<string> {
   for (let i = 0; i < 10; i++) {
-    const raw = nanoid()
-    const code = raw.slice(0, 3) + '-' + raw.slice(3)
+    const code = nanoid()
     const rows = await db`SELECT id FROM boxboxbox.events WHERE access_code = ${code} LIMIT 1`
     if (rows.length === 0) return code
   }

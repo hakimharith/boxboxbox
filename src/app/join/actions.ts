@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 export async function joinEvent(
   code: string
 ): Promise<{ error: string } | { success: true; eventId: string }> {
-  const normalized = code.toUpperCase().replace(/\s/g, '')
+  const normalized = code.trim()
   const rows = await db<{ id: string }[]>`
     SELECT id FROM boxboxbox.events WHERE access_code = ${normalized} LIMIT 1
   `

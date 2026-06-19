@@ -71,12 +71,12 @@ export default function AppNavBar({
         </div>
 
         {/* Theme toggle */}
-        <div className="navbar-end flex-shrink-0">
+        <div className="navbar-end flex-shrink-0 pr-6">
           <button
             type="button"
             onClick={toggle}
             aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            className="btn btn-ghost btn-sm w-8 h-8 min-h-0 p-0 text-brand-txt3 hover:text-brand-txt"
+            className="btn btn-ghost min-h-[44px] w-[44px] p-0 text-brand-txt3 hover:text-brand-txt"
           >
             {theme === 'dark'
               ? <Sun size={14} aria-hidden="true" />
